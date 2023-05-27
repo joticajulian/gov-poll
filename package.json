@@ -1,0 +1,39 @@
+{
+  "name": "gov-poll",
+  "version": "1.0.0",
+  "license": "MIT",
+  "dependencies": {
+    "koilib": "^5.5.3",
+    "koinos-precompiler-as": "^0.4.1"
+  },
+  "devDependencies": {
+    "@as-covers/core": "^0.2.1",
+    "@as-pect/cli": "^6.2.4",
+    "@koinos/mock-vm": "^0.4.3",
+    "@koinos/sdk-as": "^0.4.5",
+    "@roaminroe/protoc": "^2.4.0",
+    "@typescript-eslint/eslint-plugin": "^5.39.0",
+    "@typescript-eslint/parser": "^5.39.0",
+    "as-proto": "npm:@koinos/as-proto@1.0.0",
+    "assemblyscript": "^0.19.22",
+    "copyfiles": "^2.4.1",
+    "dotenv": "^16.0.3",
+    "eslint": "^8.25.0",
+    "ts-node": "^10.4.0",
+    "typescript": "^4.8.4",
+    "yaml": "^2.2.2"
+  },
+  "scripts": {
+    "poll:asbuild": "asc poll/build/index.ts --config poll/asconfig.json --use abort= --target release",
+    "poll:precompile": "koinos-precompiler-as poll",
+    "poll:build": "yarn poll:precompile && yarn poll:asbuild",
+    "poll:test": "asp --verbose --config poll/as-pect.config.js",
+    "poll:deploy": "ts-node poll/scripts/deployment.ts",
+    "poll:info": "node getSha256.js poll",
+    "poll:docker": "docker build --no-cache --progress=plain --build-arg CONTRACT=poll -t temp-image . && docker rmi temp-image",
+    "lint": "eslint --max-warnings 0 --ext ts \"*/assembly/**/*.ts\""
+  },
+  "config": {
+    "protocVersion": "21.8"
+  }
+}
