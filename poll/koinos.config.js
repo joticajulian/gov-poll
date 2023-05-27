@@ -3,13 +3,8 @@ require("dotenv").config({ path: path.join(__dirname, "../.env") });
 
 module.exports = {
   class: "PollContract",
-  proto: [
-    "./proto/poll.proto",
-    "./proto/common.proto",
-  ],
-  files: [
-    "./PollContract.ts",
-  ],
+  proto: ["./proto/poll.proto", "./proto/common.proto"],
+  files: ["./PollContract.ts"],
   sourceDir: "./assembly",
   buildDir: "./build",
   koinosProtoDir: "../node_modules/koinos-precompiler-as/koinos-proto",
