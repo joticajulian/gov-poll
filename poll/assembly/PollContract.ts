@@ -7,6 +7,7 @@ import {
   StringBytes,
   Base58,
   Token,
+  error,
 } from "@koinos/sdk-as";
 import { poll } from "./proto/poll";
 import { common } from "./proto/common";
@@ -18,11 +19,9 @@ export class PollContract {
 
   contractId: Uint8Array;
 
-  pollCounter: Storage.Obj<common.uint64>;
+  pollCounter: Storage.Obj<common.uint32>;
 
-  polls: Storage.ProtoMap<common.uint64, poll.poll_data>;
-
-  balances: Storage.Map<Uint8Array, common.uint64>;
+  polls: Storage.ProtoMap<common.uint32, poll.poll_data>;
 
   constructor() {
     this.contractId = System.getContractId();
@@ -52,16 +51,16 @@ export class PollContract {
     this.pollCounter = new Storage.Obj(
       this.contractId,
       0,
-      common.uint64.decode,
-      common.uint64.encode,
-      () => new common.uint64(0)
+      common.uint32.decode,
+      common.uint32.encode,
+      () => new common.uint32(0)
     );
 
     this.polls = new Storage.ProtoMap(
       this.contractId,
       1,
-      common.uint64.decode,
-      common.uint64.encode,
+      common.uint32.decode,
+      common.uint32.encode,
       poll.poll_data.decode,
       poll.poll_data.encode,
       null
@@ -73,8 +72,25 @@ export class PollContract {
    * @external
    */
   createPoll(args: poll.poll_params): void {
+    System.require(
+      System.checkAuthority(
+        authority.authorization_type.contract_call,
+        args.creator!,
+        this.callArgs!.args
+      ),
+      `account ${Base58.encode(args.creator!)} authorization failed`,
+      error.error_code.authorization_failure
+    );
+    System.require(args.start_date <= args.end_date, "invalid dates");
+    System.require(
+      args.end_date > System.getHeadInfo().head_block_time,
+      "end date must be in the future"
+    );
+    System.require(!!args.title && args.title!.length > 0, "invalid title");
+    System.require(args.tiers.length > 0, "no tiers defined");
+
     const pollCounter = this.pollCounter.get()!;
-    this.polls.put(pollCounter, new poll.poll_data(args));
+    this.polls.put(pollCounter, new poll.poll_data(args, 0, 0));
     pollCounter.value += 1;
     this.pollCounter.put(pollCounter);
   }
@@ -84,28 +100,38 @@ export class PollContract {
    * @external
    */
   vote(args: poll.vote_args): void {
-    const pollId = new common.uint64(args.poll_id);
-    const poll = this.polls.get(pollId);
-    System.require(poll, `poll ID ${args.poll_id} does not exist`);
-    const tierMap = new Storage.Map(
+    const pollId = new common.uint32(args.poll_id);
+    const pollObjAux = this.polls.get(pollId);
+    System.require(pollObjAux, `poll ID ${args.poll_id} does not exist`);
+    const pollObj = pollObjAux!;
+    System.require(
+      System.checkAuthority(
+        authority.authorization_type.contract_call,
+        args.voter!,
+        this.callArgs!.args
+      ),
+      `account ${Base58.encode(args.voter!)} authorization failed`,
+      error.error_code.authorization_failure
+    );
+    const tierMap = new Storage.Map<Uint8Array, common.uint32>(
       this.contractId,
       OFFSET_SPACE_ID_VOTES + 6 * args.poll_id,
-      common.uint64.decode,
-      common.uint64.encode,
+      common.uint32.decode,
+      common.uint32.encode,
       null
     );
-    const oldTier = tierMap.get(args.voter);
+    const oldTier = tierMap.get(args.voter!);
     let oldWeightVote = new poll.weight_vote(0, poll.vote.undef);
     if (oldTier) {
-      const weightVotes = new Storage.Map(
+      const weightVotes = new Storage.Map<Uint8Array, poll.weight_vote>(
         this.contractId,
         OFFSET_SPACE_ID_VOTES + 6 * args.poll_id + oldTier.value,
         poll.weight_vote.decode,
         poll.weight_vote.encode,
         () => new poll.weight_vote(0, poll.vote.undef)
       );
-      oldWeightVote = weightVotes.get(args.voter)!;
-      weightVotes.remove(args.voter);
+      oldWeightVote = weightVotes.get(args.voter!)!;
+      weightVotes.remove(args.voter!);
     }
 
     if (args.vote == poll.vote.undef) {
@@ -113,26 +139,24 @@ export class PollContract {
     }
 
     const vhp = new Token(System.getContractAddress("vhp"));
-    const currentBalance = vhp.balanceOf(args.voter);
+    const currentBalance = vhp.balanceOf(args.voter!);
 
     let tier = 0;
-    if (currentBalance >= poll.params.minTier1) {
-      tier = 1;
-    } else if (currentBalance >= poll.params.minTier2) {
-      tier = 2;
-    } else if (currentBalance >= poll.params.minTier3) {
-      tier = 3;
-    } else if (currentBalance >= poll.params.minTier4) {
-      tier = 4;
-    } else if (currentBalance >= poll.params.minTier5) {
-      tier = 5;
-    } else {
+    let tierValue: u64 = 0;
+    for (let i = 0; i < pollObj.params!.tiers.length; i += 1) {
+      tierValue = pollObj.params!.tiers[i];
+      if (currentBalance >= tierValue) {
+        tier = i + 1;
+        break;
+      }
+    }
+    if (tier == 0) {
       System.fail(
-        `The balance ${currentBalance} is lower than the tier 5 ${poll.params.minTier5}`
+        `The balance ${currentBalance} is lower than ${tierValue}, the minimum VHP expected in the last tier`
       );
     }
 
-    const weightVotes = new Storage.Map(
+    const weightVotes = new Storage.Map<Uint8Array, poll.weight_vote>(
       this.contractId,
       OFFSET_SPACE_ID_VOTES + 6 * args.poll_id + tier,
       poll.weight_vote.decode,
@@ -140,17 +164,20 @@ export class PollContract {
       () => new poll.weight_vote(0, poll.vote.undef)
     );
     weightVotes.put(
-      args.voter,
+      args.voter!,
       new poll.weight_vote(currentBalance, args.vote)
     );
 
     if (oldWeightVote.vote == poll.vote.yes) {
-      poll.weight_votes -= oldWeightVote.weight;
+      pollObj.weight_votes -= oldWeightVote.weight;
     }
     if (args.vote == poll.vote.yes) {
-      poll.weight_votes += currentBalance;
+      pollObj.weight_votes += currentBalance;
     }
 
-    this.polls.put(pollId, poll);
+    this.polls.put(pollId, pollObj);
+    System.event("vote", Protobuf.encode(args, poll.vote_args.encode), [
+      args.voter!,
+    ]);
   }
 }

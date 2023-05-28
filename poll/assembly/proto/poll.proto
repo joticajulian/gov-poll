@@ -4,37 +4,51 @@ package poll;
 
 import "koinos/options.proto";
 
-message str {
-   string value = 1;
-}
- 
-message uint32 {
-   uint32 value = 1;
-}
- 
-message uint64 {
-   uint64 value = 1 [jstype = JS_STRING];
+enum vote {
+   undef = 0;
+   yes = 1;
+   no = 2;
 }
 
-message boole {
-    bool value = 1;
+message vote_args {
+   uint32 poll_id = 1;
+   bytes voter = 2 [(koinos.btype) = ADDRESS];
+   vote vote = 3;
 }
 
-message address {
-    bytes account = 1 [(koinos.btype) = ADDRESS];
+message weight_vote {
+   uint64 weight = 1 [jstype = JS_STRING];
+   vote vote = 2;
 }
 
-enum direction {
-   ascending = 0;
-   descending = 1;
+message poll_params {
+   string title = 1;
+   string summary = 2;
+   string url = 3;
+   bytes creator = 4 [(koinos.btype) = ADDRESS];
+   uint64 start_date = 5 [jstype = JS_STRING];
+   uint64 end_date = 6 [jstype = JS_STRING];
+   /**
+    * Tiers
+    * users are categorized in groups depending
+    * on the VHP. Max 5 tiers. Example:
+    *
+    *   [
+    *     10000000000000,
+    *     1000000000000,
+    *     0
+    *   ]
+    *
+    *   3 tiers:
+    *   - 0: more than 100k VHP
+    *   - 1: between 10k and 100k VHP
+    *   - 2: lower than 10k VHP
+    */
+   repeated uint64 tiers = 7 [jstype = JS_STRING];
 }
 
-message list_args {
-   bytes start = 1 [(koinos.btype) = ADDRESS];
-   int32 limit = 2;
-   direction direction = 3;
-}
-
-message addresses {
-   repeated bytes accounts = 1 [(koinos.btype) = ADDRESS];
+message poll_data {
+   poll_params params = 1;
+   uint64 weight_votes = 2 [jstype = JS_STRING];
+   uint64 total_vhp_supply = 3 [jstype = JS_STRING];
 }
