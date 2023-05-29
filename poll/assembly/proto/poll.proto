@@ -16,6 +16,11 @@ message vote_args {
    vote vote = 3;
 }
 
+message vote_path_args {
+   uint32 poll_id = 1;
+   bytes voter = 2 [(koinos.btype) = ADDRESS];
+}
+
 message weight_vote {
    uint64 weight = 1 [jstype = JS_STRING];
    vote vote = 2;
@@ -49,6 +54,9 @@ message poll_params {
 
 message poll_data {
    poll_params params = 1;
-   uint64 weight_votes = 2 [jstype = JS_STRING];
-   uint64 total_vhp_supply = 3 [jstype = JS_STRING];
+   uint64 yes_vhp_votes = 2 [jstype = JS_STRING];
+   uint64 total_vhp_votes = 3 [jstype = JS_STRING];
+   uint64 total_vhp_supply = 4 [jstype = JS_STRING];
 }
+
+

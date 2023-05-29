@@ -67,6 +67,48 @@ export class PollContract {
     );
   }
 
+  getTier(pollId: u32, tierId: u32): Storage.Map<Uint8Array, poll.weight_vote> {
+    return new Storage.Map<Uint8Array, poll.weight_vote>(
+      this.contractId,
+      OFFSET_SPACE_ID_VOTES + 6 * pollId + tierId,
+      poll.weight_vote.decode,
+      poll.weight_vote.encode,
+      () => new poll.weight_vote(0, poll.vote.undef)
+    );
+  }
+
+  _getTierId(pollId: u32, voter: Uint8Array): common.uint32 {
+    const tierMap = new Storage.Map<Uint8Array, common.uint32>(
+      this.contractId,
+      OFFSET_SPACE_ID_VOTES + 6 * pollId,
+      common.uint32.decode,
+      common.uint32.encode,
+      () => new common.uint32(0)
+    );
+    return tierMap.get(voter)!;
+  }
+
+  _setTierId(pollId: u32, voter: Uint8Array, tierId: u32): void {
+    const tierMap = new Storage.Map<Uint8Array, common.uint32>(
+      this.contractId,
+      OFFSET_SPACE_ID_VOTES + 6 * pollId,
+      common.uint32.decode,
+      common.uint32.encode,
+      null
+    );
+    if (tierId == 0) {
+      tierMap.remove(voter);
+    } else {
+      tierMap.put(voter, new common.uint32(tierId));
+    }
+  }
+
+  getTierId(args: poll.vote_path_args): common.uint32 {
+    const tier = this._getTierId(args.poll_id, args.voter!)!;
+    System.require(tier.value > 0, "voter not found");
+    return tier!;
+  }
+
   /**
    * Create a new Poll
    * @external
@@ -95,6 +137,85 @@ export class PollContract {
     this.pollCounter.put(pollCounter);
   }
 
+  updateVote(
+    pollId: u32,
+    pollObj: poll.poll_data,
+    tierId: u32,
+    tier: Storage.Map<Uint8Array, poll.weight_vote>,
+    vhpToken: Token,
+    voter: Uint8Array,
+    weightVote: poll.weight_vote,
+    newVote: poll.vote
+  ): i32 {
+    let oldVhpVote: u64;
+    let oldYesVhpVote: u64;
+    let newVhpVote: u64;
+    let newYesVhpVote: u64;
+
+    // previous vote participation
+    if (weightVote.vote == poll.vote.undef) {
+      oldVhpVote = 0;
+      oldYesVhpVote = 0;
+    } else if (weightVote.vote == poll.vote.no) {
+      oldVhpVote = weightVote.weight;
+      oldYesVhpVote = 0;
+    } else {
+      oldVhpVote = weightVote.weight;
+      oldYesVhpVote = weightVote.weight;
+    }
+
+    const voteExists = tierId > 0;
+    let newTierId: i32 = 0;
+
+    // new vote participation
+    if (newVote == poll.vote.undef) {
+      if (voteExists) tier.remove(voter);
+      this._setTierId(pollId, voter, 0);
+      newVhpVote = 0;
+      newYesVhpVote = 0;
+    } else {
+      // new vote is yes or no
+      weightVote.vote = newVote;
+      weightVote.weight = vhpToken.balanceOf(voter);
+
+      newVhpVote = weightVote.weight;
+      newYesVhpVote = newVote == poll.vote.yes ? weightVote.weight : 0;
+
+      // manage tiers
+      let tierValue: u64 = 0;
+      for (let i = 0; i < pollObj.params!.tiers.length; i += 1) {
+        tierValue = pollObj.params!.tiers[i];
+        if (newVhpVote >= tierValue) {
+          newTierId = i + 1;
+          break;
+        }
+      }
+
+      if (newTierId == 0) {
+        // not enough to enter any tier. Its balance is considered 0
+        newVhpVote = 0;
+        newYesVhpVote = 0;
+        if (voteExists) tier.remove(voter);
+        this._setTierId(pollId, voter, 0);
+      } else if (newTierId == tierId) {
+        // update vote in the same tier
+        tier.put(voter, weightVote);
+      } else {
+        // change of tier
+        const newTier = this.getTier(pollId, newTierId);
+        if (voteExists) tier.remove(voter);
+        newTier.put(voter, weightVote);
+        this._setTierId(pollId, voter, newTierId);
+      }
+    }
+
+    pollObj.yes_vhp_votes =
+      pollObj.yes_vhp_votes + newYesVhpVote - oldYesVhpVote;
+    pollObj.total_vhp_votes = pollObj.total_vhp_votes + newVhpVote - oldVhpVote;
+
+    return newTierId;
+  }
+
   /**
    * Vote in a poll
    * @external
@@ -113,67 +234,30 @@ export class PollContract {
       `account ${Base58.encode(args.voter!)} authorization failed`,
       error.error_code.authorization_failure
     );
-    const tierMap = new Storage.Map<Uint8Array, common.uint32>(
-      this.contractId,
-      OFFSET_SPACE_ID_VOTES + 6 * args.poll_id,
-      common.uint32.decode,
-      common.uint32.encode,
-      null
-    );
-    const oldTier = tierMap.get(args.voter!);
-    let oldWeightVote = new poll.weight_vote(0, poll.vote.undef);
-    if (oldTier) {
-      const weightVotes = new Storage.Map<Uint8Array, poll.weight_vote>(
-        this.contractId,
-        OFFSET_SPACE_ID_VOTES + 6 * args.poll_id + oldTier.value,
-        poll.weight_vote.decode,
-        poll.weight_vote.encode,
-        () => new poll.weight_vote(0, poll.vote.undef)
-      );
-      oldWeightVote = weightVotes.get(args.voter!)!;
-      weightVotes.remove(args.voter!);
-    }
+    const oldTierId = this._getTierId(args.poll_id, args.voter!);
+    const oldTier = this.getTier(args.poll_id, oldTierId.value);
+    const vhpToken = new Token(System.getContractAddress("vhp"));
 
-    if (args.vote == poll.vote.undef) {
-      return;
-    }
+    const oldWeightVote =
+      oldTierId.value > 0
+        ? oldTier.get(args.voter!)!
+        : new poll.weight_vote(0, poll.vote.undef);
 
-    const vhp = new Token(System.getContractAddress("vhp"));
-    const currentBalance = vhp.balanceOf(args.voter!);
-
-    let tier = 0;
-    let tierValue: u64 = 0;
-    for (let i = 0; i < pollObj.params!.tiers.length; i += 1) {
-      tierValue = pollObj.params!.tiers[i];
-      if (currentBalance >= tierValue) {
-        tier = i + 1;
-        break;
-      }
-    }
-    if (tier == 0) {
-      System.fail(
-        `The balance ${currentBalance} is lower than ${tierValue}, the minimum VHP expected in the last tier`
-      );
-    }
-
-    const weightVotes = new Storage.Map<Uint8Array, poll.weight_vote>(
-      this.contractId,
-      OFFSET_SPACE_ID_VOTES + 6 * args.poll_id + tier,
-      poll.weight_vote.decode,
-      poll.weight_vote.encode,
-      () => new poll.weight_vote(0, poll.vote.undef)
-    );
-    weightVotes.put(
+    const newTierId = this.updateVote(
+      pollId.value,
+      pollObj,
+      oldTierId.value,
+      oldTier,
+      vhpToken,
       args.voter!,
-      new poll.weight_vote(currentBalance, args.vote)
+      oldWeightVote,
+      args.vote
     );
 
-    if (oldWeightVote.vote == poll.vote.yes) {
-      pollObj.weight_votes -= oldWeightVote.weight;
-    }
-    if (args.vote == poll.vote.yes) {
-      pollObj.weight_votes += currentBalance;
-    }
+    System.require(
+      newTierId > 0,
+      "The VHP balance is lower than the minimum VHP expected in the last tier"
+    );
 
     this.polls.put(pollId, pollObj);
     System.event("vote", Protobuf.encode(args, poll.vote_args.encode), [
