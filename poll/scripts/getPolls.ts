@@ -9,12 +9,12 @@ async function main() {
   const network = koinosConfig.networks[networkName];
   if (!network) throw new Error(`network ${networkName} not found`);
   const provider = new Provider(network.rpcNodes);
-  
+
   if (!network.accounts.contract.id) throw new Error("contract id not defined");
   const contract = new Contract({
     id: network.accounts.contract.id,
     abi,
-    provider
+    provider,
   });
 
   const { result } = await contract.functions.getPolls({

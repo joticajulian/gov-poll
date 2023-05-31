@@ -61,10 +61,12 @@ message poll_params {
 }
 
 message poll_data {
-   poll_params params = 1;
-   uint64 yes_vhp_votes = 2 [jstype = JS_STRING];
-   uint64 total_vhp_votes = 3 [jstype = JS_STRING];
-   uint64 total_vhp_supply = 4 [jstype = JS_STRING];
+   uint32 id = 1;
+   poll_params params = 2;
+   uint64 yes_vhp_votes = 3 [jstype = JS_STRING];
+   uint64 total_vhp_votes = 4 [jstype = JS_STRING];
+   uint64 total_vhp_supply = 5 [jstype = JS_STRING];
+   uint64 last_update = 6 [jstype = JS_STRING];
 }
 
 enum direction {

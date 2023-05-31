@@ -156,8 +156,20 @@ export class PollContract {
     System.require(!!args.title && args.title!.length > 0, "invalid title");
     System.require(args.tiers.length > 0, "no tiers defined");
 
+    const now = System.getHeadInfo().head_block_time;
+    const vhpToken = new Token(System.getContractAddress("vhp"));
     const pollCounter = this.pollCounter.get()!;
-    this.polls.put(pollCounter, new poll.poll_data(args, 0, 0));
+    this.polls.put(
+      pollCounter,
+      new poll.poll_data(
+        pollCounter.value,
+        args,
+        0,
+        0,
+        vhpToken.totalSupply(),
+        now
+      )
+    );
     pollCounter.value += 1;
     this.pollCounter.put(pollCounter);
     return new common.nothing();
@@ -320,6 +332,9 @@ export class PollContract {
         obj.value.vote
       );
     }
+
+    pollObj.last_update = System.getHeadInfo().head_block_time;
+    pollObj.total_vhp_supply = vhpToken.totalSupply();
 
     this.polls.put(pollId, pollObj);
     return new common.nothing();
