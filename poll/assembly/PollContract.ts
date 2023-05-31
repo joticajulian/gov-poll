@@ -114,6 +114,27 @@ export class PollContract {
   }
 
   /**
+   * @external
+   * @readonly
+   */
+  getPolls(args: poll.list_args): poll.polls {
+    const polls = new poll.polls([]);
+    const pollCounter = this.pollCounter.get()!;
+    let i = args.start;
+    while (
+      u32(polls.polls.length) < args.limit &&
+      ((args.direction == poll.direction.ascending && i < pollCounter.value) ||
+        (args.direction == poll.direction.descending && i >= 0))
+    ) {
+      const pollObj = this.polls.get(new common.uint32(i));
+      if (pollObj) polls.polls.push(pollObj);
+      if (args.direction == poll.direction.ascending) i += 1;
+      else i -= 1;
+    }
+    return polls;
+  }
+
+  /**
    * Create a new Poll
    * @external
    */

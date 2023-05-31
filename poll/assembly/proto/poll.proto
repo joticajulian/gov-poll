@@ -67,4 +67,17 @@ message poll_data {
    uint64 total_vhp_supply = 4 [jstype = JS_STRING];
 }
 
+enum direction {
+   ascending = 0;
+   descending = 1;
+}
 
+message list_args {
+   uint32 start = 1;
+   uint32 limit = 2;
+   direction direction = 3;
+}
+
+message polls {
+   repeated poll_data polls = 1;
+}
