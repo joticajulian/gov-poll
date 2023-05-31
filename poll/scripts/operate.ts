@@ -26,14 +26,16 @@ async function main() {
   switch (command) {
     case "fund-voters": {
       const hdKoinos = new HDKoinos(network.accounts.voters.seed);
+      const pob = new Contract({
+        id: "198RuEouhgiiaQm7uGfaXS6jqZr6g6nyoR",
+        provider,
+      });
+      await pob.fetchAbi();
+      pob.abi.methods.burn.entry_point = Number(pob.abi.methods.burn["entry-point"]);
+      pob.abi.methods.burn.read_only = pob.abi.methods.burn["read-only"];
+
       for (let i = 0; i < 5; i += 1) {
         const voter = hdKoinos.deriveKeyAccount(i, `voter${i}`).public.address;
-        const pob = new Contract({
-          id: "198RuEouhgiiaQm7uGfaXS6jqZr6g6nyoR",
-          abi: utils.tokenAbi,
-          provider,
-        });
-        await pob.fetchAbi();
         await transaction.pushOperation(pob.functions.burn, {
           token_amount: "1000",
           burn_address: accountWithFunds.address,
