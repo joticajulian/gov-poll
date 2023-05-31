@@ -22,6 +22,9 @@ module.exports = {
           privateKey: process.env.HARBINGER_POLL_CONTRACT_PRIVATE_KEY,
           id: process.env.HARBINGER_POLL_CONTRACT_ID,
         },
+        voters: {
+          seed: process.env.HARBINGER_VOTERS_SEED,
+        },
       },
     },
     mainnet: {

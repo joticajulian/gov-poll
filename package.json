@@ -19,6 +19,7 @@
     "copyfiles": "^2.4.1",
     "dotenv": "^16.0.3",
     "eslint": "^8.25.0",
+    "ethers": "^5.6.2",
     "ts-node": "^10.4.0",
     "typescript": "^4.8.4",
     "yaml": "^2.2.2"
@@ -31,6 +32,7 @@
     "poll:deploy": "ts-node poll/scripts/deployment.ts",
     "poll:create": "ts-node poll/scripts/createPoll.ts",
     "poll:get": "ts-node poll/scripts/getPolls.ts",
+    "poll:operate": "ts-node poll/scripts/operate.ts",
     "poll:info": "node getSha256.js poll",
     "poll:docker": "docker build --no-cache --progress=plain --build-arg CONTRACT=poll -t temp-image . && docker rmi temp-image",
     "lint": "eslint --max-warnings 0 --ext ts \"*/assembly/**/*.ts\""
