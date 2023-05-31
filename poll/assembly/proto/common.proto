@@ -4,6 +4,8 @@ package common;
 
 import "koinos/options.proto";
 
+message nothing {}
+
 message str {
    string value = 1;
 }

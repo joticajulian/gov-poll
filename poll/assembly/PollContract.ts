@@ -67,6 +67,10 @@ export class PollContract {
     );
   }
 
+  authorize(args: common.nothing): common.boole {
+    return new common.boole(false);
+  }
+
   getTier(pollId: u32, tierId: u32): Storage.Map<Uint8Array, poll.weight_vote> {
     return new Storage.Map<Uint8Array, poll.weight_vote>(
       this.contractId,
@@ -113,7 +117,7 @@ export class PollContract {
    * Create a new Poll
    * @external
    */
-  createPoll(args: poll.poll_params): void {
+  createPoll(args: poll.poll_params): common.nothing {
     System.require(
       System.checkAuthority(
         authority.authorization_type.contract_call,
@@ -135,6 +139,7 @@ export class PollContract {
     this.polls.put(pollCounter, new poll.poll_data(args, 0, 0));
     pollCounter.value += 1;
     this.pollCounter.put(pollCounter);
+    return new common.nothing();
   }
 
   updateVote(
@@ -184,7 +189,7 @@ export class PollContract {
       // manage tiers
       let tierValue: u64 = 0;
       for (let i = 0; i < pollObj.params!.tiers.length; i += 1) {
-        tierValue = pollObj.params!.tiers[i];
+        tierValue = pollObj.params!.tiers[i].value;
         if (newVhpVote >= tierValue) {
           newTierId = i + 1;
           break;
@@ -220,7 +225,7 @@ export class PollContract {
    * Vote in a poll
    * @external
    */
-  vote(args: poll.vote_args): void {
+  vote(args: poll.vote_args): common.nothing {
     const pollId = new common.uint32(args.poll_id);
     const pollObjAux = this.polls.get(pollId);
     System.require(pollObjAux, `poll ID ${args.poll_id} does not exist`);
@@ -244,7 +249,7 @@ export class PollContract {
         : new poll.weight_vote(0, poll.vote.undef);
 
     const newTierId = this.updateVote(
-      pollId.value,
+      args.poll_id,
       pollObj,
       oldTierId.value,
       oldTier,
@@ -263,5 +268,39 @@ export class PollContract {
     System.event("vote", Protobuf.encode(args, poll.vote_args.encode), [
       args.voter!,
     ]);
+    return new common.nothing();
+  }
+
+  /**
+   * Update the VHP balances and compute the votes
+   * @external
+   */
+  updateVotes(args: poll.poll_id): common.nothing {
+    const pollId = new common.uint32(args.poll_id);
+    const pollObjAux = this.polls.get(pollId);
+    System.require(pollObjAux, `poll ID ${args.poll_id} does not exist`);
+    const pollObj = pollObjAux!;
+    const vhpToken = new Token(System.getContractAddress("vhp"));
+
+    let tierId: u32 = 1;
+    const tier = this.getTier(args.poll_id, tierId);
+    const objs = tier.getMany(new Uint8Array(0), 1000);
+    for (let i = 0; i < objs.length; i += 1) {
+      const obj = objs[i];
+      System.require(obj.key, "internal error: key not defined");
+      this.updateVote(
+        args.poll_id,
+        pollObj,
+        tierId,
+        tier,
+        vhpToken,
+        obj.key!,
+        obj.value,
+        obj.value.vote
+      );
+    }
+
+    this.polls.put(pollId, pollObj);
+    return new common.nothing();
   }
 }

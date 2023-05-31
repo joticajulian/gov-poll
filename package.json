@@ -29,6 +29,7 @@
     "poll:build": "yarn poll:precompile && yarn poll:asbuild",
     "poll:test": "asp --verbose --config poll/as-pect.config.js",
     "poll:deploy": "ts-node poll/scripts/deployment.ts",
+    "poll:create": "ts-node poll/scripts/createPoll.ts",
     "poll:info": "node getSha256.js poll",
     "poll:docker": "docker build --no-cache --progress=plain --build-arg CONTRACT=poll -t temp-image . && docker rmi temp-image",
     "lint": "eslint --max-warnings 0 --ext ts \"*/assembly/**/*.ts\""
