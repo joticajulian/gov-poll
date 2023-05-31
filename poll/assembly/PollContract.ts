@@ -280,6 +280,10 @@ export class PollContract {
       oldTierId.value > 0
         ? oldTier.get(args.voter!)!
         : new poll.weight_vote(0, poll.vote.undef);
+    System.require(
+      oldWeightVote.vote != args.vote,
+      `vote is already ${args.vote}`
+    );
 
     const newTierId = this.updateVote(
       args.poll_id,
@@ -293,7 +297,7 @@ export class PollContract {
     );
 
     System.require(
-      newTierId > 0,
+      newTierId > 0 || args.vote == poll.vote.undef,
       "The VHP balance is lower than the minimum VHP expected in the last tier"
     );
 
