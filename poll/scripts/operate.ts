@@ -101,11 +101,26 @@ async function main() {
       });
       break;
     }
+    case "vote-no": {
+      const poll = new Contract({
+        id: network.accounts.contract.id,
+        provider,
+      });
+      const voter = hdKoinos.deriveKeyAccount(2, `voter${2}`).public.address;
+      await poll.fetchAbi();
+      await transaction.pushOperation(poll.functions.vote, {
+        poll_id: 0,
+        voter: voter,
+        vote: 2,
+      });
+      break;
+    }
     default:
       throw new Error(
         `invalid command. expected commands: ${[
           "fund-voters",
           "vote-poll",
+          "vote-no",
           "transfer-vhp",
           "update-votes",
         ].join(", ")}`
