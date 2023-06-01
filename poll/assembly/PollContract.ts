@@ -290,6 +290,9 @@ export class PollContract {
     const pollObjAux = this.polls.get(pollId);
     System.require(pollObjAux, `poll ID ${args.poll_id} does not exist`);
     const pollObj = pollObjAux!;
+    const now = System.getHeadInfo().head_block_time;
+    System.require(now >= pollObj.params!.start_date, "poll has not started");
+    System.require(now <= pollObj.params!.end_date, "poll has ended");
     System.require(
       System.checkAuthority(
         authority.authorization_type.contract_call,
@@ -343,6 +346,9 @@ export class PollContract {
     const pollObjAux = this.polls.get(pollId);
     System.require(pollObjAux, `poll ID ${args.poll_id} does not exist`);
     const pollObj = pollObjAux!;
+    const now = System.getHeadInfo().head_block_time;
+    System.require(now >= pollObj.params!.start_date, "poll has not started");
+    System.require(now <= pollObj.params!.end_date, "poll has ended");
     const vhpToken = new Token(System.getContractAddress("vhp"));
 
     let tierId: u32 = 1;
