@@ -25,6 +25,11 @@ message poll_id {
    uint32 poll_id = 1;
 }
 
+message poll_tier {
+   uint32 poll_id = 1;
+   uint32 tier_id = 2;
+}
+
 message vhp_vote {
    bytes voter = 1 [(koinos.btype) = ADDRESS];
    vote vote = 2;
@@ -72,6 +77,15 @@ message poll_data {
    uint64 total_vhp_votes = 4 [jstype = JS_STRING];
    uint64 total_vhp_supply = 5 [jstype = JS_STRING];
    uint64 last_update = 6 [jstype = JS_STRING];
+}
+
+message update_votes_event {
+   uint32 poll_id = 1;
+   uint32 tier_id = 2;
+   uint32 votes_updated = 3;
+   uint64 yes_vhp_votes = 4 [jstype = JS_STRING];
+   uint64 total_vhp_votes = 5 [jstype = JS_STRING];
+   uint64 total_vhp_supply = 6 [jstype = JS_STRING];
 }
 
 enum direction {

@@ -1,10 +1,8 @@
 import {
-  Arrays,
   System,
   authority,
   Storage,
   Protobuf,
-  StringBytes,
   Base58,
   Token,
   error,
@@ -67,6 +65,10 @@ export class PollContract {
     );
   }
 
+  /**
+   * Authorize function
+   * @external
+   */
   authorize(args: common.nothing): common.boole {
     return new common.boole(false);
   }
@@ -114,6 +116,7 @@ export class PollContract {
   }
 
   /**
+   * Get list of polls
    * @external
    * @readonly
    */
@@ -137,6 +140,7 @@ export class PollContract {
   /**
    * Create a new Poll
    * @external
+   * @event poll_created poll.poll_params
    */
   createPoll(args: poll.poll_params): common.nothing {
     System.require(
@@ -172,6 +176,7 @@ export class PollContract {
     );
     pollCounter.value += 1;
     this.pollCounter.put(pollCounter);
+    System.event("poll_created", this.callArgs!.args, [args.creator!]);
     return new common.nothing();
   }
 
@@ -284,6 +289,7 @@ export class PollContract {
   /**
    * Vote in a poll
    * @external
+   * @event vote poll.vote_args
    */
   vote(args: poll.vote_args): common.nothing {
     const pollId = new common.uint32(args.poll_id);
@@ -340,8 +346,9 @@ export class PollContract {
   /**
    * Update the VHP balances and compute the votes
    * @external
+   * @event update_votes update_votes_event
    */
-  updateVotes(args: poll.poll_id): common.nothing {
+  updateVotes(args: poll.poll_tier): common.nothing {
     const pollId = new common.uint32(args.poll_id);
     const pollObjAux = this.polls.get(pollId);
     System.require(pollObjAux, `poll ID ${args.poll_id} does not exist`);
@@ -349,17 +356,22 @@ export class PollContract {
     const now = System.getHeadInfo().head_block_time;
     System.require(now >= pollObj.params!.start_date, "poll has not started");
     System.require(now <= pollObj.params!.end_date, "poll has ended");
+    System.require(args.tier_id > 0, "invalid tier id");
+    System.require(
+      args.tier_id <= u32(pollObj.params!.tiers.length),
+      `max tier id is ${pollObj.params!.tiers.length}`
+    );
     const vhpToken = new Token(System.getContractAddress("vhp"));
 
-    let tierId: u32 = 1;
-    const tier = this.getTier(args.poll_id, tierId);
+    const tier = this.getTier(args.poll_id, args.tier_id);
+    // TODO: handle computation when there are more than 1000 voters
     const objs = tier.getManyValues(new Uint8Array(0), 1000);
     for (let i = 0; i < objs.length; i += 1) {
       const obj = objs[i];
       this.updateVote(
         args.poll_id,
         pollObj,
-        tierId,
+        args.tier_id,
         tier,
         vhpToken,
         obj,
@@ -371,6 +383,21 @@ export class PollContract {
     pollObj.total_vhp_supply = vhpToken.totalSupply();
 
     this.polls.put(pollId, pollObj);
+
+    const eventData = new poll.update_votes_event(
+      args.poll_id,
+      args.tier_id,
+      objs.length,
+      pollObj.yes_vhp_votes,
+      pollObj.total_vhp_votes,
+      pollObj.total_vhp_supply
+    );
+    System.event(
+      "update_votes",
+      Protobuf.encode(eventData, poll.update_votes_event.encode),
+      []
+    );
+
     return new common.nothing();
   }
 }
