@@ -17,9 +17,11 @@ async function main() {
     provider,
   });
 
-  const { result } = await contract.functions.getPolls({
+  const { result } = await contract.functions.getVotes({
+    poll_id: 0,
+    tier_id: 1,
     start: 0,
-    limit: 20,
+    limit: 200,
     direction: "ascending",
   });
   console.log("Result");

@@ -25,9 +25,14 @@ message poll_id {
    uint32 poll_id = 1;
 }
 
-message weight_vote {
-   uint64 weight = 1 [jstype = JS_STRING];
+message vhp_vote {
+   bytes voter = 1 [(koinos.btype) = ADDRESS];
    vote vote = 2;
+   uint64 vhp = 3 [jstype = JS_STRING];
+}
+
+message vhp_votes {
+   repeated vhp_vote vhp_votes = 1;
 }
 
 message uint64 {
@@ -74,7 +79,7 @@ enum direction {
    descending = 1;
 }
 
-message list_args {
+message poll_list_args {
    uint32 start = 1;
    uint32 limit = 2;
    direction direction = 3;
@@ -82,4 +87,12 @@ message list_args {
 
 message polls {
    repeated poll_data polls = 1;
+}
+
+message poll_tier_list_args {
+   uint32 poll_id = 1;
+   uint32 tier_id = 2;
+   bytes start = 3 [(koinos.btype) = ADDRESS];
+   uint32 limit = 4;
+   direction direction = 5;
 }

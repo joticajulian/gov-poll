@@ -71,13 +71,13 @@ export class PollContract {
     return new common.boole(false);
   }
 
-  getTier(pollId: u32, tierId: u32): Storage.Map<Uint8Array, poll.weight_vote> {
-    return new Storage.Map<Uint8Array, poll.weight_vote>(
+  getTier(pollId: u32, tierId: u32): Storage.Map<Uint8Array, poll.vhp_vote> {
+    return new Storage.Map<Uint8Array, poll.vhp_vote>(
       this.contractId,
       OFFSET_SPACE_ID_VOTES + 6 * pollId + tierId,
-      poll.weight_vote.decode,
-      poll.weight_vote.encode,
-      () => new poll.weight_vote(0, poll.vote.undef)
+      poll.vhp_vote.decode,
+      poll.vhp_vote.encode,
+      () => new poll.vhp_vote(new Uint8Array(0), poll.vote.undef, 0)
     );
   }
 
@@ -117,7 +117,7 @@ export class PollContract {
    * @external
    * @readonly
    */
-  getPolls(args: poll.list_args): poll.polls {
+  getPolls(args: poll.poll_list_args): poll.polls {
     const polls = new poll.polls([]);
     const pollCounter = this.pollCounter.get()!;
     let i = args.start;
@@ -175,14 +175,41 @@ export class PollContract {
     return new common.nothing();
   }
 
+  /**
+   * Get list of votes
+   * @external
+   * @readonly
+   */
+  getVotes(args: poll.poll_tier_list_args): poll.vhp_votes {
+    System.require(args.tier_id > 0, "invalid tier id");
+    const pollId = new common.uint32(args.poll_id);
+    const pollObj = this.polls.get(pollId);
+    System.require(pollObj, `poll ID ${args.poll_id} does not exist`);
+    System.require(
+      args.tier_id <= u32(pollObj!.params!.tiers.length),
+      `max tier id is ${pollObj!.params!.tiers.length}`
+    );
+
+    const tier = this.getTier(args.poll_id, args.tier_id);
+    const direction =
+      args.direction == poll.direction.ascending
+        ? Storage.Direction.Ascending
+        : Storage.Direction.Descending;
+    const votes = tier.getManyValues(
+      args.start ? args.start! : new Uint8Array(0),
+      i32(args.limit),
+      direction
+    );
+    return new poll.vhp_votes(votes);
+  }
+
   updateVote(
     pollId: u32,
     pollObj: poll.poll_data,
     tierId: u32,
-    tier: Storage.Map<Uint8Array, poll.weight_vote>,
+    tier: Storage.Map<Uint8Array, poll.vhp_vote>,
     vhpToken: Token,
-    voter: Uint8Array,
-    weightVote: poll.weight_vote,
+    vhpVote: poll.vhp_vote,
     newVote: poll.vote
   ): i32 {
     let oldVhpVote: u64;
@@ -191,15 +218,15 @@ export class PollContract {
     let newYesVhpVote: u64;
 
     // previous vote participation
-    if (weightVote.vote == poll.vote.undef) {
+    if (vhpVote.vote == poll.vote.undef) {
       oldVhpVote = 0;
       oldYesVhpVote = 0;
-    } else if (weightVote.vote == poll.vote.no) {
-      oldVhpVote = weightVote.weight;
+    } else if (vhpVote.vote == poll.vote.no) {
+      oldVhpVote = vhpVote.vhp;
       oldYesVhpVote = 0;
     } else {
-      oldVhpVote = weightVote.weight;
-      oldYesVhpVote = weightVote.weight;
+      oldVhpVote = vhpVote.vhp;
+      oldYesVhpVote = vhpVote.vhp;
     }
 
     const voteExists = tierId > 0;
@@ -207,17 +234,17 @@ export class PollContract {
 
     // new vote participation
     if (newVote == poll.vote.undef) {
-      if (voteExists) tier.remove(voter);
-      this._setTierId(pollId, voter, 0);
+      if (voteExists) tier.remove(vhpVote.voter!);
+      this._setTierId(pollId, vhpVote.voter!, 0);
       newVhpVote = 0;
       newYesVhpVote = 0;
     } else {
       // new vote is yes or no
-      weightVote.vote = newVote;
-      weightVote.weight = vhpToken.balanceOf(voter);
+      vhpVote.vote = newVote;
+      vhpVote.vhp = vhpToken.balanceOf(vhpVote.voter!);
 
-      newVhpVote = weightVote.weight;
-      newYesVhpVote = newVote == poll.vote.yes ? weightVote.weight : 0;
+      newVhpVote = vhpVote.vhp;
+      newYesVhpVote = newVote == poll.vote.yes ? vhpVote.vhp : 0;
 
       // manage tiers
       let tierValue: u64 = 0;
@@ -233,17 +260,17 @@ export class PollContract {
         // not enough to enter any tier. Its balance is considered 0
         newVhpVote = 0;
         newYesVhpVote = 0;
-        if (voteExists) tier.remove(voter);
-        this._setTierId(pollId, voter, 0);
+        if (voteExists) tier.remove(vhpVote.voter!);
+        this._setTierId(pollId, vhpVote.voter!, 0);
       } else if (newTierId == tierId) {
         // update vote in the same tier
-        tier.put(voter, weightVote);
+        tier.put(vhpVote.voter!, vhpVote);
       } else {
         // change of tier
         const newTier = this.getTier(pollId, newTierId);
-        if (voteExists) tier.remove(voter);
-        newTier.put(voter, weightVote);
-        this._setTierId(pollId, voter, newTierId);
+        if (voteExists) tier.remove(vhpVote.voter!);
+        newTier.put(vhpVote.voter!, vhpVote);
+        this._setTierId(pollId, vhpVote.voter!, newTierId);
       }
     }
 
@@ -279,7 +306,7 @@ export class PollContract {
     const oldWeightVote =
       oldTierId.value > 0
         ? oldTier.get(args.voter!)!
-        : new poll.weight_vote(0, poll.vote.undef);
+        : new poll.vhp_vote(args.voter, poll.vote.undef, 0);
     System.require(
       oldWeightVote.vote != args.vote,
       `vote is already ${args.vote}`
@@ -291,7 +318,6 @@ export class PollContract {
       oldTierId.value,
       oldTier,
       vhpToken,
-      args.voter!,
       oldWeightVote,
       args.vote
     );
@@ -321,19 +347,17 @@ export class PollContract {
 
     let tierId: u32 = 1;
     const tier = this.getTier(args.poll_id, tierId);
-    const objs = tier.getMany(new Uint8Array(0), 1000);
+    const objs = tier.getManyValues(new Uint8Array(0), 1000);
     for (let i = 0; i < objs.length; i += 1) {
       const obj = objs[i];
-      System.require(obj.key, "internal error: key not defined");
       this.updateVote(
         args.poll_id,
         pollObj,
         tierId,
         tier,
         vhpToken,
-        obj.key!,
-        obj.value,
-        obj.value.vote
+        obj,
+        obj.vote
       );
     }
 
