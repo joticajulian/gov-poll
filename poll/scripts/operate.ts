@@ -3,7 +3,7 @@ import abi from "../build/pollcontract-abi.json";
 import koinosConfig from "../koinos.config.js";
 import HDKoinos from "./HDKoinos";
 
-const [command] = process.argv.slice(2);
+const [command, command1] = process.argv.slice(2);
 
 async function main() {
   const networkName = "harbinger";
@@ -106,10 +106,13 @@ async function main() {
         id: network.accounts.contract.id,
         provider,
       });
-      const voter = hdKoinos.deriveKeyAccount(2, `voter${2}`).public.address;
+      const voter =
+        command1 === "manaSharerIsVoter"
+          ? accountWithFunds.address
+          : hdKoinos.deriveKeyAccount(2, `voter${2}`).public.address;
       await poll.fetchAbi();
       await transaction.pushOperation(poll.functions.vote, {
-        poll_id: 0,
+        poll_id: 1,
         voter: voter,
         vote: 2,
       });

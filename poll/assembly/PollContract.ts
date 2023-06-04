@@ -4,12 +4,11 @@ import {
   Storage,
   Protobuf,
   Base58,
-  Token,
   error,
 } from "@koinos/sdk-as";
 import { poll } from "./proto/poll";
 import { common } from "./proto/common";
-
+import { Token } from "./IToken";
 const OFFSET_SPACE_ID_VOTES = 1000;
 
 export class PollContract {
@@ -170,7 +169,7 @@ export class PollContract {
         args,
         0,
         0,
-        vhpToken.totalSupply(),
+        vhpToken.totalSupply().value,
         now
       )
     );
@@ -246,7 +245,7 @@ export class PollContract {
     } else {
       // new vote is yes or no
       vhpVote.vote = newVote;
-      vhpVote.vhp = vhpToken.balanceOf(vhpVote.voter!);
+      vhpVote.vhp = vhpToken.balanceOf(new common.address(vhpVote.voter)).value;
 
       newVhpVote = vhpVote.vhp;
       newYesVhpVote = newVote == poll.vote.yes ? vhpVote.vhp : 0;
@@ -380,7 +379,7 @@ export class PollContract {
     }
 
     pollObj.last_update = System.getHeadInfo().head_block_time;
-    pollObj.total_vhp_supply = vhpToken.totalSupply();
+    pollObj.total_vhp_supply = vhpToken.totalSupply().value;
 
     this.polls.put(pollId, pollObj);
 
