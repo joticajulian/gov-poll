@@ -182,11 +182,34 @@ export class PollContract {
   }
 
   /**
-   * Get list of votes
+   * Get list of votes given a user
    * @external
    * @readonly
    */
-  getVotes(args: poll.poll_tier_list_args): poll.vhp_votes {
+  getVotesByUser(args: poll.get_votes_by_user_args): poll.vhp_votes {
+    const pollCounter = this.pollCounter.get()!;
+    System.require(args.poll_start < pollCounter.value, "invalid poll_start id");
+    System.require(args.poll_end < pollCounter.value, "invalid poll_end id");
+    System.require(args.poll_start <= args.poll_end, "poll_start can not be greater than poll_end");
+    const result = new poll.vhp_votes([]);
+    for (let pollId = args.poll_start; pollId <= args.poll_end; pollId += 1) {
+      const tierId = this._getTierId(pollId, args.voter!);
+      const tier = this.getTier(pollId, tierId.value);
+      result.vhp_votes.push(
+        tierId.value > 0
+        ? tier.get(args.voter!)!
+        : new poll.vhp_vote(args.voter, poll.vote.undef, 0)
+      );
+    }
+    return result;
+  }
+
+  /**
+   * Get list of votes given a poll and tier
+   * @external
+   * @readonly
+   */
+  getVotesByPoll(args: poll.poll_tier_list_args): poll.vhp_votes {
     System.require(args.tier_id > 0, "invalid tier id");
     const pollId = new common.uint32(args.poll_id);
     const pollObj = this.polls.get(pollId);
@@ -303,7 +326,8 @@ export class PollContract {
     const publicKey = new PoB(System.getContractAddress("pob")).get_public_key(
       new common.address(args.voter)
     );
-    const nodeOperator = Crypto.addressFromPublicKey(publicKey.data);
+    System.require(publicKey.data, "internal error: public key empty");
+    const nodeOperator = Crypto.addressFromPublicKey(publicKey.data!);
     System.require(
       System.checkAuthority(
         authority.authorization_type.contract_call,

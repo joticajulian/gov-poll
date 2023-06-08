@@ -40,6 +40,12 @@ message vhp_votes {
    repeated vhp_vote vhp_votes = 1;
 }
 
+message get_votes_by_user_args {
+   bytes voter = 1 [(koinos.btype) = ADDRESS];
+   uint32 poll_start = 2;
+   uint32 poll_end = 3;
+}
+
 message uint64 {
    uint64 value = 1 [jstype = JS_STRING];
 }
