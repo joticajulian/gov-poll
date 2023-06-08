@@ -26,6 +26,10 @@ message address {
     bytes account = 1 [(koinos.btype) = ADDRESS];
 }
 
+message data {
+    bytes data = 1;
+}
+
 enum direction {
    ascending = 0;
    descending = 1;

@@ -1,5 +1,6 @@
 import {
   System,
+  Crypto,
   authority,
   Storage,
   Protobuf,
@@ -9,6 +10,7 @@ import {
 import { poll } from "./proto/poll";
 import { common } from "./proto/common";
 import { Token } from "./IToken";
+import { PoB } from "./IPoB";
 const OFFSET_SPACE_ID_VOTES = 1000;
 
 export class PollContract {
@@ -298,10 +300,14 @@ export class PollContract {
     const now = System.getHeadInfo().head_block_time;
     System.require(now >= pollObj.params!.start_date, "poll has not started");
     System.require(now <= pollObj.params!.end_date, "poll has ended");
+    const publicKey = new PoB(System.getContractAddress("pob")).get_public_key(
+      new common.address(args.voter)
+    );
+    const nodeOperator = Crypto.addressFromPublicKey(publicKey.data);
     System.require(
       System.checkAuthority(
         authority.authorization_type.contract_call,
-        args.voter!,
+        nodeOperator,
         this.callArgs!.args
       ),
       `account ${Base58.encode(args.voter!)} authorization failed`,
