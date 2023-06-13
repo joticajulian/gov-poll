@@ -1,4 +1,4 @@
-import { System, Protobuf, StringBytes } from "@koinos/sdk-as";
+import { System, Protobuf, StringBytes, pob } from "@koinos/sdk-as";
 import { common } from "./proto/common";
 
 export class PoB {
@@ -34,6 +34,28 @@ export class PoB {
     return Protobuf.decode<common.data>(
       callRes.res.object!,
       common.data.decode
+    );
+  }
+
+  /**
+   * @external
+   * @readonly
+   */
+  get_metadata(): pob.get_metadata_result {
+    const argsBuffer = new Uint8Array(0);
+    const callRes = System.call(this._contractId, 0xfcf7a68f, argsBuffer);
+    if (callRes.code != 0) {
+      const errorMessage = `failed to call 'PoB.get_metadata': ${
+        callRes.res.error && callRes.res.error!.message
+          ? callRes.res.error!.message!
+          : ""
+      }`;
+      System.exit(callRes.code, StringBytes.stringToBytes(errorMessage));
+    }
+    if (!callRes.res.object) return new pob.get_metadata_result();
+    return Protobuf.decode<pob.get_metadata_result>(
+      callRes.res.object!,
+      pob.get_metadata_result.decode
     );
   }
 }

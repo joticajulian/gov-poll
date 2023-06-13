@@ -7,6 +7,7 @@ import {
   Base58,
   error,
 } from "@koinos/sdk-as";
+import { u128 } from "as-bignum";
 import { poll } from "./proto/poll";
 import { common } from "./proto/common";
 import { Token } from "./IToken";
@@ -72,6 +73,13 @@ export class PollContract {
    */
   authorize(args: common.nothing): common.boole {
     return new common.boole(false);
+  }
+
+  getVhpProducing(): u64 {
+    const pob = new PoB(System.getContractAddress("pob"));
+    const difficulty = pob.get_metadata().value!.difficulty;
+    const vhpProducing = u128.fromBytes(difficulty, true) / u128.fromU32(300);
+    return vhpProducing.toU64();
   }
 
   getTier(pollId: u32, tierId: u32): Storage.Map<Uint8Array, poll.vhp_vote> {
@@ -164,6 +172,7 @@ export class PollContract {
     const now = System.getHeadInfo().head_block_time;
     const vhpToken = new Token(System.getContractAddress("vhp"));
     const pollCounter = this.pollCounter.get()!;
+    const vhpProducing = this.getVhpProducing();
     this.polls.put(
       pollCounter,
       new poll.poll_data(
@@ -171,7 +180,7 @@ export class PollContract {
         args,
         0,
         0,
-        vhpToken.totalSupply().value,
+        [vhpProducing, vhpProducing, vhpProducing, vhpProducing, vhpProducing],
         now
       )
     );
@@ -188,17 +197,23 @@ export class PollContract {
    */
   getVotesByUser(args: poll.get_votes_by_user_args): poll.vhp_votes {
     const pollCounter = this.pollCounter.get()!;
-    System.require(args.poll_start < pollCounter.value, "invalid poll_start id");
+    System.require(
+      args.poll_start < pollCounter.value,
+      "invalid poll_start id"
+    );
     System.require(args.poll_end < pollCounter.value, "invalid poll_end id");
-    System.require(args.poll_start <= args.poll_end, "poll_start can not be greater than poll_end");
+    System.require(
+      args.poll_start <= args.poll_end,
+      "poll_start can not be greater than poll_end"
+    );
     const result = new poll.vhp_votes([]);
     for (let pollId = args.poll_start; pollId <= args.poll_end; pollId += 1) {
       const tierId = this._getTierId(pollId, args.voter!);
       const tier = this.getTier(pollId, tierId.value);
       result.vhp_votes.push(
         tierId.value > 0
-        ? tier.get(args.voter!)!
-        : new poll.vhp_vote(args.voter, poll.vote.undef, 0)
+          ? tier.get(args.voter!)!
+          : new poll.vhp_vote(args.voter, poll.vote.undef, 0)
       );
     }
     return result;
@@ -409,7 +424,8 @@ export class PollContract {
     }
 
     pollObj.last_update = System.getHeadInfo().head_block_time;
-    pollObj.total_vhp_supply = vhpToken.totalSupply().value;
+    pollObj.vhp_producing.shift();
+    pollObj.vhp_producing.push(this.getVhpProducing());
 
     this.polls.put(pollId, pollObj);
 
@@ -419,7 +435,7 @@ export class PollContract {
       objs.length,
       pollObj.yes_vhp_votes,
       pollObj.total_vhp_votes,
-      pollObj.total_vhp_supply
+      pollObj.vhp_producing
     );
     System.event(
       "update_votes",

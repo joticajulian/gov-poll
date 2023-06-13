@@ -81,7 +81,7 @@ message poll_data {
    poll_params params = 2;
    uint64 yes_vhp_votes = 3 [jstype = JS_STRING];
    uint64 total_vhp_votes = 4 [jstype = JS_STRING];
-   uint64 total_vhp_supply = 5 [jstype = JS_STRING];
+   repeated uint64 vhp_producing = 5 [jstype = JS_STRING];
    uint64 last_update = 6 [jstype = JS_STRING];
 }
 
@@ -91,7 +91,7 @@ message update_votes_event {
    uint32 votes_updated = 3;
    uint64 yes_vhp_votes = 4 [jstype = JS_STRING];
    uint64 total_vhp_votes = 5 [jstype = JS_STRING];
-   uint64 total_vhp_supply = 6 [jstype = JS_STRING];
+   repeated uint64 vhp_producing = 6 [jstype = JS_STRING];
 }
 
 enum direction {
